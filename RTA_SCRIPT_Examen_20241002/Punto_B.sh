@@ -1,44 +1,103 @@
-#! /bin/bash 
+#!/bin/bash
 
-echo "Creando una partición extendida en el disco /dev/sdc..."
+echo "Particiono el disco: /dev/sdc."
+echo
 
-# Crear partición extendida y lógicas usando fdisk
-sudo fdisk /dev/sdc/
+sudo fdisk /dev/sdc << EOF
+n
+e
+4
 
-{
-  echo  "p" # Ver la tabla de particiones
-   echo  "n" # Crear una nueva partición
-    echo "e" # Partición extendida
-    echo "" # Aceptar el sector de inicio por defecto
-    echo "+10G" # Tamaño de la partición extendida, le entrego todo el disco
 
-    # Crear particiones lógicas de 1 GB
-    for i in {1..10}
-    do
-        echo "n"  # Nueva partición
-        echo "l"  # Lógica
-        echo "$i" # Número de partición
-        echo ""   # Primer sector (por defecto)
-        if [ "$i" -eq 10 ]; then
-            echo "" # Usar el espacio restante en la última partición
-        else
-            echo "+1G" # Tamaño 1 GB para las demás
-        fi
-    done
+n
 
-    echo "w"  # Guardar cambios
-} | sudo fdisk /dev/sdc
++1G
+n
 
-echo "Formateando las particiones lógicas..."
-for i in {1..10}
-do
++1G
+n
+
++1G
+n
+
++1G
+n
+
++1G
+n
+
++1G
+n
+
++1G
+n
+
++1G
+n
+
+
+w
+EOF
+
+echo
+echo "Particiones creadas."
+sudo fdisk -l /dev/sdc
+echo
+echo "Formateo las particiones: "
+
+for i in {5..14}; do
     sudo mkfs.ext4 /dev/sdc$i
 done
 
-echo "Montando las particiones..."
-for i in {1..10}
-do
-    sudo mount /dev/sdc$i /punto_A/Examenes-UTN/alumno_$(( (i-5)/3 + 2 ))/parcial_$(( (i-5)%3 + 1 ))
+echo
+
+# Definir el rango de particiones y el número de alumnos y parciales
+particiones=(5 6 7 8 9 10 11 12 13 14)  # Lista de particiones disponibles
+alumnos=3
+parciales=3
+
+echo "Monto las particiones: "
+index=0  # Índice para acceder a la lista de particiones
+
+for j in $(seq 1 $alumnos); do
+    for x in $(seq 1 $parciales); do
+        if [ $index -lt ${#particiones[@]} ]; then
+            # Asignar la partición
+            particion=${particiones[$index]}
+            dir_path=~/Examenes-UTN/alumno_$j/parcial_$x
+
+            # Crea el directorio si no existe
+            mkdir -p "$dir_path"
+
+            # Agrega la entrada a fstab
+            echo "/dev/sdc$particion $dir_path ext4 defaults 0 0" | sudo tee -a /etc/fstab
+
+            # Monta la partición
+            sudo mount /dev/sdc$particion "$dir_path"
+            ((index++))  # Incrementa el índice para la siguiente partición
+        else
+            echo "No hay suficientes particiones disponibles."
+            exit 1
+        fi
+    done
 done
 
-echo "Proceso completado."
+# Montar la última partición en el directorio del docente
+if [ $index -lt ${#particiones[@]} ]; then
+    particion=${particiones[$index]}
+    dir_profesores=~/Examenes-UTN/profesores
+
+    # Crea el directorio del docente si no existe
+    mkdir -p "$dir_profesores"
+
+    # Agrega la entrada a fstab
+    echo "/dev/sdc$particion $dir_profesores ext4 defaults 0 0" | sudo tee -a /etc/fstab
+
+    # Monta la partición
+    sudo mount /dev/sdc$particion "$dir_profesores"
+    echo "La última partición se ha montado en el directorio docente."
+else
+    echo "No hay suficientes particiones disponibles para el docente."
+    exit 1
+fi
+
